@@ -6,9 +6,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
-import javax.ws.rs.WebApplicationException;
-import java.util.*;
+import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -26,8 +28,10 @@ class TimeServiceTest {
     void criar_ok() {
         Time t = new Time();
         t.setNome("A");
+
         when(repo.findByNome("A")).thenReturn(Optional.empty());
         when(repo.save(t)).thenReturn(t);
+
         assertEquals(t, service.criar(t));
     }
 
@@ -35,9 +39,13 @@ class TimeServiceTest {
     void criar_nomeDuplicado() {
         Time t = new Time();
         t.setNome("A");
+
         when(repo.findByNome("A")).thenReturn(Optional.of(t));
-        WebApplicationException ex = assertThrows(WebApplicationException.class, () -> service.criar(t));
-        assertEquals(400, ex.getResponse().getStatus());
+
+        ResponseStatusException ex =
+                assertThrows(ResponseStatusException.class, () -> service.criar(t));
+
+        assertEquals(HttpStatus.BAD_REQUEST.value(), ex.getStatusCode().value());
     }
 
     @Test
@@ -81,23 +89,31 @@ class TimeServiceTest {
     @Test
     void atualizar_notFound() {
         when(repo.findById(1L)).thenReturn(Optional.empty());
-        WebApplicationException ex = assertThrows(WebApplicationException.class, () -> service.atualizar(1L, new Time()));
-        assertEquals(404, ex.getResponse().getStatus());
+
+        ResponseStatusException ex =
+                assertThrows(ResponseStatusException.class, () -> service.atualizar(1L, new Time()));
+
+        assertEquals(HttpStatus.NOT_FOUND.value(), ex.getStatusCode().value());
     }
 
     @Test
     void deletar_ok() {
         Time t = new Time();
         when(repo.findById(1L)).thenReturn(Optional.of(t));
+
         service.deletar(1L);
+
         verify(repo, times(1)).delete(t);
     }
 
     @Test
-    void deletar_naoExiste() {
+    void deletar_notFound() {
         when(repo.findById(1L)).thenReturn(Optional.empty());
-        service.deletar(1L);
+
+        ResponseStatusException ex =
+                assertThrows(ResponseStatusException.class, () -> service.deletar(1L));
+
+        assertEquals(HttpStatus.NOT_FOUND.value(), ex.getStatusCode().value());
         verify(repo, never()).delete(any());
     }
 }
-

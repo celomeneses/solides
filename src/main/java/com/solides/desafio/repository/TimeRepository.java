@@ -1,18 +1,16 @@
 package com.solides.desafio.repository;
 
 import com.solides.desafio.domain.Time;
-
-import javax.enterprise.context.ApplicationScoped;
-import javax.persistence.EntityManager;
-import javax.persistence.PersistenceContext;
+import org.springframework.stereotype.Repository;
+import jakarta.persistence.*;
 import java.util.List;
 import java.util.Optional;
 
-@ApplicationScoped
+@Repository
 public class TimeRepository {
 
     @PersistenceContext
-    EntityManager em;
+    private EntityManager em;
 
     public Time save(Time t){
         em.persist(t); return t;
@@ -32,7 +30,8 @@ public class TimeRepository {
 
     public Optional<Time> findByNome(String nome){
         try{
-            Time t = em.createQuery("select t from Time t where t.nome=:n", Time.class).setParameter("n", nome).getSingleResult();
+            Time t = em.createQuery("select t from Time t where t.nome=:n", Time.class)
+                    .setParameter("n", nome).getSingleResult();
             return Optional.of(t);
         }catch(Exception e){ return Optional.empty(); }
     }

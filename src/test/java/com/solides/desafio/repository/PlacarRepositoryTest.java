@@ -1,11 +1,14 @@
 package com.solides.desafio.repository;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.NoResultException;
+import jakarta.persistence.Query;
+import jakarta.persistence.StoredProcedureQuery;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import javax.persistence.*;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -29,7 +32,8 @@ class PlacarRepositoryTest {
     @Test
     void iniciar_ok() {
         when(em.createStoredProcedureQuery("sp_inicia_placar")).thenReturn(spQuery);
-        when(spQuery.registerStoredProcedureParameter(anyInt(), eq(String.class), eq(ParameterMode.IN))).thenReturn(spQuery);
+        when(spQuery.registerStoredProcedureParameter(anyInt(), eq(String.class), eq(jakarta.persistence.ParameterMode.IN)))
+                .thenReturn(spQuery);
         when(spQuery.setParameter(1, "json")).thenReturn(spQuery);
         when(spQuery.getSingleResult()).thenReturn("RESULT");
 
@@ -42,7 +46,8 @@ class PlacarRepositoryTest {
     @Test
     void atualizar_ok() {
         when(em.createStoredProcedureQuery("sp_atualiza_placar")).thenReturn(spQuery);
-        when(spQuery.registerStoredProcedureParameter(anyInt(), eq(String.class), eq(ParameterMode.IN))).thenReturn(spQuery);
+        when(spQuery.registerStoredProcedureParameter(anyInt(), eq(String.class), eq(jakarta.persistence.ParameterMode.IN)))
+                .thenReturn(spQuery);
         when(spQuery.setParameter(1, "abc")).thenReturn(spQuery);
         when(spQuery.setParameter(2, "{x}")).thenReturn(spQuery);
         when(spQuery.getSingleResult()).thenReturn("OK");
@@ -56,7 +61,8 @@ class PlacarRepositoryTest {
     @Test
     void atualizar_nullResult() {
         when(em.createStoredProcedureQuery("sp_atualiza_placar")).thenReturn(spQuery);
-        when(spQuery.registerStoredProcedureParameter(anyInt(), eq(String.class), eq(ParameterMode.IN))).thenReturn(spQuery);
+        when(spQuery.registerStoredProcedureParameter(anyInt(), eq(String.class), eq(jakarta.persistence.ParameterMode.IN)))
+                .thenReturn(spQuery);
         when(spQuery.setParameter(anyInt(), anyString())).thenReturn(spQuery);
         when(spQuery.getSingleResult()).thenReturn(null);
 
@@ -68,7 +74,8 @@ class PlacarRepositoryTest {
     @Test
     void finalizar_ok() {
         when(em.createStoredProcedureQuery("sp_finaliza_placar")).thenReturn(spQuery);
-        when(spQuery.registerStoredProcedureParameter(anyInt(), eq(String.class), eq(ParameterMode.IN))).thenReturn(spQuery);
+        when(spQuery.registerStoredProcedureParameter(anyInt(), eq(String.class), eq(jakarta.persistence.ParameterMode.IN)))
+                .thenReturn(spQuery);
         when(spQuery.setParameter(1, "abc")).thenReturn(spQuery);
 
         repo.finalizar("abc");
@@ -86,6 +93,17 @@ class PlacarRepositoryTest {
 
         assertTrue(r.isPresent());
         assertEquals("DATA", r.get());
+    }
+
+    @Test
+    void buscarDadosPorHash_nullResult() {
+        when(em.createNativeQuery("select dados from placar where hash_id = :h")).thenReturn(nativeQuery);
+        when(nativeQuery.setParameter("h", "abc")).thenReturn(nativeQuery);
+        when(nativeQuery.getSingleResult()).thenReturn(null);
+
+        Optional<String> r = repo.buscarDadosPorHash("abc");
+
+        assertTrue(r.isEmpty());
     }
 
     @Test

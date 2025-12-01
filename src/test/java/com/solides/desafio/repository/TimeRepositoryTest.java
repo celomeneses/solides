@@ -4,9 +4,10 @@ import com.solides.desafio.domain.Time;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.TypedQuery;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import javax.persistence.*;
 import java.util.List;
 import java.util.Optional;
 
@@ -90,4 +91,3 @@ class TimeRepositoryTest {
         assertEquals(Optional.empty(), repo.findByNome("A"));
     }
 }
-

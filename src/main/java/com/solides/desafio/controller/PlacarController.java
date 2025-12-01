@@ -3,143 +3,109 @@ package com.solides.desafio.controller;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.solides.desafio.service.PlacarService;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
-import javax.inject.Inject;
-import javax.ws.rs.*;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
-import java.io.IOException;
 import java.util.Optional;
 
-@Path("/placar")
-@Consumes(MediaType.APPLICATION_JSON)
-@Produces(MediaType.APPLICATION_JSON)
+@RestController
+@RequestMapping("/api/placar")
 public class PlacarController {
 
-    @Inject
-    PlacarService placarService;
-
+    private final PlacarService placarService;
     private final ObjectMapper mapper = new ObjectMapper();
 
-    /**
-     * POST /placar/iniciar
-     * Body: JSON com dados iniciais (time_da_casa, time_visitante, etc)
-     * Retorna: 201 com o JSON retornado pela procedure (ex: {"hash_id":"..."})
-     */
-    @POST
-    @Path("/iniciar")
-    public Response iniciarPlacar(String payload) {
-        if (payload == null || payload.isBlank()) {
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .entity("{\"error\":\"Payload inválido\"}")
-                    .build();
-        }
+    public PlacarController(PlacarService placarService) {
+        this.placarService = placarService;
+    }
 
+    @PostMapping(value = "/iniciar", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> iniciarPlacar(@RequestBody JsonNode payload) {
+        if (payload == null || payload.isNull() || payload.isEmpty()) {
+            return ResponseEntity.badRequest().contentType(MediaType.APPLICATION_JSON)
+                    .body(mapper.createObjectNode().put("error","Payload inválido"));
+        }
         try {
-            String result = placarService.iniciar(payload);
-            return Response.status(Response.Status.CREATED).entity(result).build();
+            String payloadStr = mapper.writeValueAsString(payload);
+            String result = placarService.iniciar(payloadStr);
+            if (result == null || result.isBlank()) {
+                return ResponseEntity.status(500).contentType(MediaType.APPLICATION_JSON)
+                        .body(mapper.createObjectNode().put("error","Resposta inválida da service"));
+            }
+            JsonNode node = mapper.readTree(result);
+            return ResponseEntity.status(201).contentType(MediaType.APPLICATION_JSON).body(node);
         } catch (Exception ex) {
-            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
-                    .entity("{\"error\":\"Erro ao iniciar placar: " + ex.getMessage() + "\"}")
-                    .build();
+            return ResponseEntity.status(500).contentType(MediaType.APPLICATION_JSON)
+                    .body(mapper.createObjectNode().put("error","Erro ao iniciar placar: " + ex.getMessage()));
         }
     }
 
-    /**
-     * POST /placar/pontuar/{hash_id}
-     * Query param (preferencial): ?lado=casa  (ou visitante)
-     * Body (alternativa): { "lado": "casa" }
-     * Retorna: 200 com o placar atualizado (JSON) ou 400/404 conforme o caso
-     */
-    @POST
-    @Path("/pontuar/{hash_id}")
-    public Response pontuar(
-            @PathParam("hash_id") String hashId,
-            @QueryParam("lado") String ladoQuery,
-            String body
+    @PostMapping(value = "/pontuar/{hash_id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> pontuar(
+            @PathVariable("hash_id") String hashId,
+            @RequestParam(value = "lado", required = false) String ladoQuery,
+            @RequestBody(required = false) JsonNode body
     ) {
         try {
             String lado = null;
-
-            // 1) Prioriza query param
             if (ladoQuery != null && !ladoQuery.isBlank()) {
                 lado = ladoQuery;
-            } else if (body != null && !body.isBlank()) {
-                // 2) Tenta extrair do body JSON
-                try {
-                    JsonNode node = mapper.readTree(body);
-                    if (node.has("lado")) lado = node.get("lado").asText();
-                    else if (node.has("side")) lado = node.get("side").asText(); // fallback
-                } catch (IOException e) {
-                    return Response.status(Response.Status.BAD_REQUEST)
-                            .entity("{\"error\":\"Body JSON inválido\"}")
-                            .build();
-                }
+            } else if (body != null && !body.isEmpty()) {
+                if (body.has("lado")) lado = body.get("lado").asText();
+                else if (body.has("side")) lado = body.get("side").asText();
             }
 
             if (lado == null || lado.isBlank()) {
-                return Response.status(Response.Status.BAD_REQUEST)
-                        .entity("{\"error\":\"Parâmetro 'lado' é obrigatório (casa ou visitante)\"}")
-                        .build();
+                return ResponseEntity.badRequest().contentType(MediaType.APPLICATION_JSON)
+                        .body(mapper.createObjectNode().put("error","Parâmetro 'lado' é obrigatório (casa ou visitante)"));
             }
 
             String atualizado = placarService.pontuar(hashId, lado);
-            return Response.ok(atualizado).build();
+            if (atualizado == null) {
+                return ResponseEntity.status(500).contentType(MediaType.APPLICATION_JSON)
+                        .body(mapper.createObjectNode().put("error","Resposta inválida da service"));
+            }
+            JsonNode node = mapper.readTree(atualizado);
+            return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(node);
 
         } catch (IllegalArgumentException iae) {
-            return Response.status(Response.Status.NOT_FOUND)
-                    .entity("{\"error\":\"" + iae.getMessage() + "\"}")
-                    .build();
+            return ResponseEntity.status(404).contentType(MediaType.APPLICATION_JSON)
+                    .body(mapper.createObjectNode().put("error", iae.getMessage()));
         } catch (Exception ex) {
-            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
-                    .entity("{\"error\":\"Erro ao pontuar: " + ex.getMessage() + "\"}")
-                    .build();
+            return ResponseEntity.status(500).contentType(MediaType.APPLICATION_JSON)
+                    .body(mapper.createObjectNode().put("error","Erro ao pontuar: " + ex.getMessage()));
         }
     }
 
-    /**
-     * GET /placar/{hash_id}
-     * Retorna o placar atual (primeiro do Redis; se não achar, do DB)
-     */
-    @GET
-    @Path("/{hash_id}")
-    public Response buscar(@PathParam("hash_id") String hashId) {
+    @GetMapping(value = "/{hash_id}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> buscar(@PathVariable("hash_id") String hashId) {
         try {
             Optional<String> opt = placarService.buscar(hashId);
             if (opt.isPresent()) {
-                // já é uma string JSON; devolve como application/json
-                return Response.ok(opt.get(), MediaType.APPLICATION_JSON).build();
+                JsonNode node = mapper.readTree(opt.get());
+                return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(node);
             } else {
-                return Response.status(Response.Status.NOT_FOUND)
-                        .entity("{\"error\":\"Placar não encontrado\"}")
-                        .build();
+                return ResponseEntity.status(404).contentType(MediaType.APPLICATION_JSON)
+                        .body(mapper.createObjectNode().put("error","Placar não encontrado"));
             }
         } catch (Exception ex) {
-            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
-                    .entity("{\"error\":\"Erro ao buscar placar: " + ex.getMessage() + "\"}")
-                    .build();
+            return ResponseEntity.status(500).contentType(MediaType.APPLICATION_JSON)
+                    .body(mapper.createObjectNode().put("error","Erro ao buscar placar: " + ex.getMessage()));
         }
     }
 
-    /**
-     * DELETE /placar/{hash_id}
-     * Finaliza o placar (procedure) e remove do cache Redis (se existir)
-     */
-    @DELETE
-    @Path("/{hash_id}")
-    public Response finalizar(@PathParam("hash_id") String hashId) {
+    @DeleteMapping("/{hash_id}")
+    public ResponseEntity<?> finalizar(@PathVariable("hash_id") String hashId) {
         try {
             placarService.finalizar(hashId);
-            return Response.noContent().build();
+            return ResponseEntity.noContent().build();
         } catch (IllegalArgumentException iae) {
-            return Response.status(Response.Status.NOT_FOUND)
-                    .entity("{\"error\":\"" + iae.getMessage() + "\"}")
-                    .build();
+            return ResponseEntity.status(404).contentType(MediaType.APPLICATION_JSON)
+                    .body(mapper.createObjectNode().put("error", iae.getMessage()));
         } catch (Exception ex) {
-            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
-                    .entity("{\"error\":\"Erro ao finalizar placar: " + ex.getMessage() + "\"}")
-                    .build();
+            return ResponseEntity.status(500).contentType(MediaType.APPLICATION_JSON)
+                    .body(mapper.createObjectNode().put("error","Erro ao finalizar placar: " + ex.getMessage()));
         }
     }
 }
-

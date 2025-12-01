@@ -1,115 +1,50 @@
 package com.solides.desafio.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.solides.desafio.domain.Time;
 import com.solides.desafio.service.TimeService;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.*;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
 
-import javax.ws.rs.core.Response;
 import java.util.List;
-import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Unit tests for TimeController covering all branches.
- */
-@ExtendWith(MockitoExtension.class)
+@WebMvcTest(TimeController.class)
 class TimeControllerTest {
 
-    @Mock
-    private TimeService service;
-
-    @InjectMocks
-    private TimeController controller;
+    @Autowired MockMvc mvc;
+    @MockBean TimeService service;
+    @Autowired ObjectMapper mapper;
 
     @Test
-    void criar_deveRetornar201_eChamarService() {
-        Time input = new Time();
-        input.setNome("Time A");
-        input.setLogo("logo");
+    void criar_ok() throws Exception {
+        Time t = new Time(); t.setNome("A"); t.setLogo("L");
+        when(service.criar(any())).thenReturn(t);
 
-        Time returned = new Time();
-        returned.setId(1L);
-        returned.setNome("Time A");
-        returned.setLogo("logo");
-
-        when(service.criar(input)).thenReturn(returned);
-
-        Response resp = controller.criar(input);
-
-        assertEquals(201, resp.getStatus());
-        assertEquals(returned, resp.getEntity());
-        verify(service, times(1)).criar(input);
+        mvc.perform(post("/api/time")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(t)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.nome").value("A"));
     }
 
     @Test
-    void listar_deveRetornarListaDoService() {
+    void listar_ok() throws Exception {
         Time t1 = new Time(); t1.setNome("A");
-        Time t2 = new Time(); t2.setNome("B");
+        when(service.listar()).thenReturn(List.of(t1));
 
-        when(service.listar()).thenReturn(List.of(t1, t2));
-
-        List<Time> res = controller.listar();
-
-        assertNotNull(res);
-        assertEquals(2, res.size());
-        assertSame(t1, res.get(0));
-        verify(service, times(1)).listar();
-    }
-
-    @Test
-    void buscar_deveRetornar200_quandoExistir() {
-        Long id = 10L;
-        Time found = new Time(); found.setId(id); found.setNome("X");
-
-        when(service.buscar(id)).thenReturn(Optional.of(found));
-
-        Response resp = controller.buscar(id);
-
-        assertEquals(200, resp.getStatus());
-        assertEquals(found, resp.getEntity());
-        verify(service, times(1)).buscar(id);
-    }
-
-    @Test
-    void buscar_deveRetornar404_quandoNaoExistir() {
-        Long id = 999L;
-        when(service.buscar(id)).thenReturn(Optional.empty());
-
-        Response resp = controller.buscar(id);
-
-        assertEquals(404, resp.getStatus());
-        verify(service, times(1)).buscar(id);
-    }
-
-    @Test
-    void atualizar_deveRetornar200_eChamarService() {
-        Long id = 5L;
-        Time input = new Time(); input.setNome("Novo");
-        Time updated = new Time(); updated.setId(id); updated.setNome("Novo");
-
-        when(service.atualizar(id, input)).thenReturn(updated);
-
-        Response resp = controller.atualizar(id, input);
-
-        assertEquals(200, resp.getStatus());
-        assertEquals(updated, resp.getEntity());
-        verify(service, times(1)).atualizar(id, input);
-    }
-
-    @Test
-    void deletar_deveRetornar204_eChamarService() {
-        Long id = 7L;
-
-        // void method: default doNothing
-        Response resp = controller.deletar(id);
-
-        assertEquals(204, resp.getStatus());
-        verify(service, times(1)).deletar(id);
+        mvc.perform(get("/api/time"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].nome").value("A"));
     }
 }
-

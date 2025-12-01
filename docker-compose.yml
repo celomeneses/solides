@@ -2,7 +2,7 @@ services:
   app:
     build: .
     ports:
-      - "8080:8080"
+      - "8081:8080"
     depends_on:
       - postgres
       - rabbitmq
@@ -13,7 +13,9 @@ services:
       - DB_USER=postgres
       - DB_PASS=postgres
       - RABBIT_HOST=rabbitmq
+      - RABBIT_PORT=5672
       - REDIS_HOST=redis
+      - REDIS_PORT=6379
   postgres:
     image: postgres:13
     environment:
@@ -29,6 +31,6 @@ services:
       - "5672:5672"
       - "15672:15672"
   redis:
-    image: redis:7
+    image: redis:latest
     ports:
       - "6379:6379"

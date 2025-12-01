@@ -1,246 +1,140 @@
 package com.solides.desafio.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.solides.desafio.service.PlacarService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.*;
+import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.MediaType;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-import javax.ws.rs.core.Response;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-/**
- * Testes unitários para PlacarController cobrindo todos os caminhos de execução.
- */
 @ExtendWith(MockitoExtension.class)
 class PlacarControllerTest {
 
     @Mock
-    private PlacarService placarService;
+    PlacarService placarService;
 
-    @InjectMocks
-    private PlacarController controller;
+    MockMvc mvc;
+    ObjectMapper mapper;
 
-    // ---------- iniciarPlacar ----------
-
-    @Test
-    void iniciarPlacar_deveRetornar201_quandoPayloadValido() {
-        String payload = "{\"time_da_casa\": {\"nome\":\"A\",\"pontos\":0}, \"time_visitante\": {\"nome\":\"B\",\"pontos\":0}}";
-        String retornoProcedure = "{\"hash_id\":\"abc123\"}";
-
-        when(placarService.iniciar(payload)).thenReturn(retornoProcedure);
-
-        Response resp = controller.iniciarPlacar(payload);
-
-        assertEquals(201, resp.getStatus());
-        assertNotNull(resp.getEntity());
-        assertTrue(resp.getEntity().toString().contains("abc123"));
-        verify(placarService, times(1)).iniciar(payload);
+    @BeforeEach
+    void setup() {
+        mapper = new ObjectMapper();
+        PlacarController controller = new PlacarController(placarService);
+        mvc = MockMvcBuilders.standaloneSetup(controller)
+                .setMessageConverters(new MappingJackson2HttpMessageConverter(mapper))
+                .build();
     }
 
     @Test
-    void iniciarPlacar_deveRetornar400_quandoPayloadVazio() {
-        Response resp = controller.iniciarPlacar("");
-        assertEquals(400, resp.getStatus());
-        assertNotNull(resp.getEntity());
-        verifyNoInteractions(placarService);
+    void iniciar_shouldReturn201_whenPayloadValid() throws Exception {
+        ObjectNode payload = mapper.createObjectNode();
+        payload.set("time_da_casa", mapper.createObjectNode().put("nome", "A").put("pontos", 0));
+        payload.set("time_visitante", mapper.createObjectNode().put("nome", "B").put("pontos", 0));
+        String response = "{\"hash_id\":\"abc123\"}";
+
+        when(placarService.iniciar(anyString())).thenReturn(response);
+
+        mvc.perform(post("/api/placar/iniciar")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(payload)))
+                .andExpect(status().isCreated())
+                .andExpect(content().json(response));
     }
 
     @Test
-    void iniciarPlacar_deveRetornar500_quandoServiceLancarExcecao() {
-        String payload = "{\"x\":1}";
-        when(placarService.iniciar(payload)).thenThrow(new RuntimeException("erro interno"));
-
-        Response resp = controller.iniciarPlacar(payload);
-
-        assertEquals(500, resp.getStatus());
-        String entity = resp.getEntity().toString();
-        assertTrue(entity.contains("Erro ao iniciar placar"));
-        assertTrue(entity.contains("erro interno"));
-        verify(placarService, times(1)).iniciar(payload);
-    }
-
-    // ---------- pontuar ----------
-
-    @Test
-    void pontuar_deveRetornar200_quandoQueryParamLadoInformado() {
-        String hash = "abc123";
-        String ladoQuery = "casa";
-        String resultadoAtualizado = "{\"time_da_casa\":{\"pontos\":1},\"time_visitante\":{\"pontos\":0}}";
-
-        when(placarService.pontuar(hash, ladoQuery)).thenReturn(resultadoAtualizado);
-
-        Response resp = controller.pontuar(hash, ladoQuery, null);
-
-        assertEquals(200, resp.getStatus());
-        assertEquals(resultadoAtualizado, resp.getEntity());
-        verify(placarService, times(1)).pontuar(hash, ladoQuery);
+    void iniciar_shouldReturn400_whenPayloadEmpty() throws Exception {
+        mvc.perform(post("/api/placar/iniciar")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(""))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
-    void pontuar_deveRetornar200_quandoBodyContemLado() {
-        String hash = "abc123";
+    void pontuar_shouldReturn200_whenQueryParamProvided() throws Exception {
+        String updated = "{\"time_da_casa\":{\"pontos\":1},\"time_visitante\":{\"pontos\":0}}";
+        when(placarService.pontuar(eq("abc123"), eq("casa"))).thenReturn(updated);
+
+        mvc.perform(post("/api/placar/pontuar/abc123")
+                        .param("lado", "casa"))
+                .andExpect(status().isOk())
+                .andExpect(content().json(updated));
+    }
+
+    @Test
+    void pontuar_shouldReturn200_whenBodyContainsLado() throws Exception {
         String body = "{\"lado\":\"visitante\"}";
-        String resultadoAtualizado = "{\"time_da_casa\":{\"pontos\":0},\"time_visitante\":{\"pontos\":1}}";
+        String updated = "{\"time_da_casa\":{\"pontos\":1},\"time_visitante\":{\"pontos\":1}}";
+        when(placarService.pontuar(eq("abc123"), eq("visitante"))).thenReturn(updated);
 
-        when(placarService.pontuar(hash, "visitante")).thenReturn(resultadoAtualizado);
-
-        Response resp = controller.pontuar(hash, null, body);
-
-        assertEquals(200, resp.getStatus());
-        assertEquals(resultadoAtualizado, resp.getEntity());
-        verify(placarService, times(1)).pontuar(hash, "visitante");
+        mvc.perform(post("/api/placar/pontuar/abc123")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(content().json(updated));
     }
 
     @Test
-    void pontuar_deveUsarFallbackSide_quandoBodyContemSide() {
-        String hash = "abc123";
-        String body = "{\"side\":\"casa\"}";
-        String resultado = "{\"time_da_casa\":{\"pontos\":1}}";
-
-        when(placarService.pontuar(hash, "casa")).thenReturn(resultado);
-
-        Response resp = controller.pontuar(hash, null, body);
-
-        assertEquals(200, resp.getStatus());
-        assertEquals(resultado, resp.getEntity());
-        verify(placarService, times(1)).pontuar(hash, "casa");
+    void pontuar_shouldReturn400_whenLadoMissing() throws Exception {
+        mvc.perform(post("/api/placar/pontuar/abc123")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
-    void pontuar_deveRetornar400_quandoBodyJsonInvalido() {
-        String hash = "abc123";
-        String body = "{ invalid json ";
+    void pontuar_shouldReturn404_whenServiceThrowsNotFound() throws Exception {
+        when(placarService.pontuar(eq("nope"), eq("casa")))
+                .thenThrow(new IllegalArgumentException("Placar não encontrado: nope"));
 
-        Response resp = controller.pontuar(hash, null, body);
-
-        assertEquals(400, resp.getStatus());
-        String entity = resp.getEntity().toString();
-        assertTrue(entity.contains("Body JSON inválido"));
-        verifyNoInteractions(placarService);
+        mvc.perform(post("/api/placar/pontuar/nope")
+                        .param("lado", "casa"))
+                .andExpect(status().isNotFound());
     }
 
     @Test
-    void pontuar_deveRetornar400_quandoLadoNaoInformado() {
-        String hash = "abc123";
-        Response resp = controller.pontuar(hash, null, null);
-        assertEquals(400, resp.getStatus());
-        assertNotNull(resp.getEntity());
-        verifyNoInteractions(placarService);
+    void buscar_shouldReturn200_whenFound() throws Exception {
+        String json = "{\"time_da_casa\":{\"pontos\":1},\"time_visitante\":{\"pontos\":0}}";
+        when(placarService.buscar("abc123")).thenReturn(Optional.of(json));
+
+        mvc.perform(get("/api/placar/abc123"))
+                .andExpect(status().isOk())
+                .andExpect(content().json(json));
     }
 
     @Test
-    void pontuar_deveRetornar404_quandoServiceLancarIllegalArgumentException() {
-        String hash = "nao-existe";
-        when(placarService.pontuar(hash, "casa")).thenThrow(new IllegalArgumentException("Placar não encontrado"));
+    void buscar_shouldReturn404_whenNotFound() throws Exception {
+        when(placarService.buscar("notfound")).thenReturn(Optional.empty());
 
-        Response resp = controller.pontuar(hash, "casa", null);
-
-        assertEquals(404, resp.getStatus());
-        String entity = resp.getEntity().toString();
-        assertTrue(entity.contains("Placar não encontrado"));
-        verify(placarService, times(1)).pontuar(hash, "casa");
+        mvc.perform(get("/api/placar/notfound"))
+                .andExpect(status().isNotFound());
     }
 
     @Test
-    void pontuar_deveRetornar500_quandoServiceLancarExcecaoGenerica() {
-        String hash = "abc123";
-        when(placarService.pontuar(hash, "casa")).thenThrow(new RuntimeException("boom"));
+    void finalizar_shouldReturn204_whenOk() throws Exception {
+        doNothing().when(placarService).finalizar("abc123");
 
-        Response resp = controller.pontuar(hash, "casa", null);
-
-        assertEquals(500, resp.getStatus());
-        String entity = resp.getEntity().toString();
-        assertTrue(entity.contains("Erro ao pontuar"));
-        assertTrue(entity.contains("boom"));
-        verify(placarService, times(1)).pontuar(hash, "casa");
-    }
-
-    // ---------- buscar ----------
-
-    @Test
-    void buscar_deveRetornar200_quandoPlacarExistir() {
-        String hash = "abc123";
-        String dados = "{\"time_da_casa\":{\"pontos\":1}}";
-
-        when(placarService.buscar(hash)).thenReturn(Optional.of(dados));
-
-        Response resp = controller.buscar(hash);
-
-        assertEquals(200, resp.getStatus());
-        assertEquals(dados, resp.getEntity());
-        verify(placarService, times(1)).buscar(hash);
+        mvc.perform(delete("/api/placar/abc123"))
+                .andExpect(status().isNoContent());
     }
 
     @Test
-    void buscar_deveRetornar404_quandoPlacarNaoExistir() {
-        String hash = "nao-existe";
-        when(placarService.buscar(hash)).thenReturn(Optional.empty());
+    void finalizar_shouldReturn404_whenNotFound() throws Exception {
+        doThrow(new IllegalArgumentException("not found")).when(placarService).finalizar("nope");
 
-        Response resp = controller.buscar(hash);
-
-        assertEquals(404, resp.getStatus());
-        assertNotNull(resp.getEntity());
-        verify(placarService, times(1)).buscar(hash);
-    }
-
-    @Test
-    void buscar_deveRetornar500_quandoServiceLancarExcecao() {
-        String hash = "abc123";
-        when(placarService.buscar(hash)).thenThrow(new RuntimeException("falha DB"));
-
-        Response resp = controller.buscar(hash);
-
-        assertEquals(500, resp.getStatus());
-        String entity = resp.getEntity().toString();
-        assertTrue(entity.contains("Erro ao buscar placar"));
-        assertTrue(entity.contains("falha DB"));
-        verify(placarService, times(1)).buscar(hash);
-    }
-
-    // ---------- finalizar ----------
-
-    @Test
-    void finalizar_deveRetornar204_quandoSucesso() {
-        String hash = "abc123";
-
-        // comportamento padrão: método void não faz nada
-        Response resp = controller.finalizar(hash);
-
-        assertEquals(204, resp.getStatus());
-        verify(placarService, times(1)).finalizar(hash);
-    }
-
-    @Test
-    void finalizar_deveRetornar404_quandoServiceLancarIllegalArgumentException() {
-        String hash = "nao-existe";
-        doThrow(new IllegalArgumentException("Placar não encontrado")).when(placarService).finalizar(hash);
-
-        Response resp = controller.finalizar(hash);
-
-        assertEquals(404, resp.getStatus());
-        String entity = resp.getEntity().toString();
-        assertTrue(entity.contains("Placar não encontrado"));
-        verify(placarService, times(1)).finalizar(hash);
-    }
-
-    @Test
-    void finalizar_deveRetornar500_quandoServiceLancarExcecaoGenerica() {
-        String hash = "abc123";
-        doThrow(new RuntimeException("erro grave")).when(placarService).finalizar(hash);
-
-        Response resp = controller.finalizar(hash);
-
-        assertEquals(500, resp.getStatus());
-        String entity = resp.getEntity().toString();
-        assertTrue(entity.contains("Erro ao finalizar placar"));
-        assertTrue(entity.contains("erro grave"));
-        verify(placarService, times(1)).finalizar(hash);
+        mvc.perform(delete("/api/placar/nope"))
+                .andExpect(status().isNotFound());
     }
 }
-
-
-

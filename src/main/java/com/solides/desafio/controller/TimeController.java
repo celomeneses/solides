@@ -2,40 +2,43 @@ package com.solides.desafio.controller;
 
 import com.solides.desafio.domain.Time;
 import com.solides.desafio.service.TimeService;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
-import javax.inject.Inject;
-import javax.ws.rs.*;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
 import java.util.List;
 
-
-@Path("/time")
-@Consumes(MediaType.APPLICATION_JSON)
-@Produces(MediaType.APPLICATION_JSON)
+@RestController
+@RequestMapping("/api/time")
 public class TimeController {
 
-    @Inject
-    TimeService service;
+    private final TimeService service;
 
-    @POST
-    public Response criar(Time t){ return Response.status(201).entity(service.criar(t)).build(); }
+    public TimeController(TimeService service) {
+        this.service = service;
+    }
 
-    @GET
+    @PostMapping
+    public ResponseEntity<Time> criar(@RequestBody Time t){
+        Time created = service.criar(t);
+        return ResponseEntity.status(201).body(created);
+    }
+
+    @GetMapping
     public List<Time> listar(){ return service.listar(); }
 
-    @GET @Path("{id}")
-    public Response buscar(@PathParam("id") Long id){
-        return service.buscar(id).map(Response::ok).orElse(Response.status(404)).build();
+    @GetMapping("/{id}")
+    public ResponseEntity<Time> buscar(@PathVariable Long id){
+        return service.buscar(id).map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    @PUT @Path("{id}")
-    public Response atualizar(@PathParam("id") Long id, Time t){
-        return Response.ok(service.atualizar(id,t)).build();
+    @PutMapping("/{id}")
+    public ResponseEntity<Time> atualizar(@PathVariable Long id, @RequestBody Time t){
+        return ResponseEntity.ok(service.atualizar(id,t));
     }
 
-    @DELETE @Path("{id}")
-    public Response deletar(@PathParam("id") Long id){
-        service.deletar(id); return Response.noContent().build();
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deletar(@PathVariable Long id){
+        service.deletar(id);
+        return ResponseEntity.noContent().build();
     }
 }

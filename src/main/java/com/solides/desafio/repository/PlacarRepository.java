@@ -1,42 +1,49 @@
 package com.solides.desafio.repository;
 
+import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
-import javax.enterprise.context.ApplicationScoped;
-import javax.persistence.*;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.NoResultException;
+import jakarta.persistence.PersistenceContext;
+
 import java.util.Optional;
 
-@ApplicationScoped
+@Repository
 public class PlacarRepository {
 
     @PersistenceContext
-    EntityManager em;
+    private EntityManager em;
 
-    public String iniciar(String json){
-        StoredProcedureQuery q = em.createStoredProcedureQuery("sp_inicia_placar");
-        q.registerStoredProcedureParameter(1, String.class, ParameterMode.IN);
-        q.setParameter(1, json);
-        q.execute();
-        return q.getSingleResult().toString();
-    }
-
-    public String atualizar(String hashId, String patchJson) {
-        StoredProcedureQuery q = em.createStoredProcedureQuery("sp_atualiza_placar");
-        q.registerStoredProcedureParameter(1, String.class, ParameterMode.IN);
-        q.registerStoredProcedureParameter(2, String.class, ParameterMode.IN);
-        q.setParameter(1, hashId);
-        q.setParameter(2, patchJson);
-        q.execute();
-        Object res = q.getSingleResult();
+    @Transactional
+    public String iniciar(String json) {
+        Object res = em.createNativeQuery("select sp_inicia_placar(:p)")
+                .setParameter("p", json)
+                .getSingleResult();
         return res != null ? res.toString() : null;
     }
 
-    public void finalizar(String hashId) {
-        StoredProcedureQuery q = em.createStoredProcedureQuery("sp_finaliza_placar");
-        q.registerStoredProcedureParameter(1, String.class, ParameterMode.IN);
-        q.setParameter(1, hashId);
-        q.execute();
+    @Transactional
+    public String atualizar(String hashId, String patchJson) {
+        Object res = em.createNativeQuery("select sp_atualiza_placar(:h, :p)")
+                .setParameter("h", hashId)
+                .setParameter("p", patchJson)
+                .getSingleResult();
+        return res != null ? res.toString() : null;
     }
 
+    @Transactional
+    public void finalizar(String hashId) {
+        try {
+            em.createNativeQuery("select sp_finaliza_placar(:h)")
+                    .setParameter("h", hashId)
+                    .getSingleResult();
+        } catch (NoResultException ignore) {
+            // Ok: some drivers return no result for void functions
+        }
+    }
+
+    @Transactional(readOnly = true)
     public Optional<String> buscarDadosPorHash(String hashId) {
         try {
             Object res = em.createNativeQuery("select dados from placar where hash_id = :h")
